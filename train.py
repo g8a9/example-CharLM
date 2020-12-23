@@ -1,4 +1,5 @@
 from aim.pytorch_lightning import AimLogger
+import mlflow.pytorch
 from argparse import ArgumentParser
 import torch
 import pytorch_lightning as pl
@@ -58,7 +59,9 @@ class PySourceDataset(Dataset):
         target_seq = self.corpus[idx + 1 : idx + self.seq_len + 1]
 
         #  one-hot
-        source_seq_t = torch.stack([self._get_onehot(c) for c in source_seq]).squeeze(dim=1)
+        source_seq_t = torch.stack([self._get_onehot(c) for c in source_seq]).squeeze(
+            dim=1
+        )
         target_seq_t = torch.Tensor([self.c2i[c] for c in target_seq]).long()
 
         return (source_seq_t, target_seq_t)
@@ -99,7 +102,7 @@ class CharLM(pl.LightningModule):
 
         # store the last step's hidden state
         # TODO should this be fed as initial state to the next sequence?
-        # self.hidden_state = (state_h.detach(), state_c.detach())
+        #  self.hidden_state = (state_h.detach(), state_c.detach())
 
         # compute sum of losses across time steps
         loss = F.nll_loss(log_prob.view(-1, log_prob.shape[2]), target.view(-1))
@@ -121,11 +124,11 @@ def cli_main():
     parser.add_argument("--batch_size", default=512, type=int)
     parser.add_argument("--n_layers", default=3, type=int)
     parser.add_argument("--hidden_size", type=int, default=256)
-    parser.add_argument("--dropout", type=float, default=0.5) 
+    parser.add_argument("--dropout", type=float, default=0.5)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--num_workers", type=int, default=1)
     parser.add_argument("--exp_name", type=str, default="pl_charLM")
-    
+
     parser = pl.Trainer.add_argparse_args(parser)
     args = parser.parse_args()
 
@@ -133,7 +136,9 @@ def cli_main():
     # data
     # ------------
 
-    py_train_dataset = PySourceDataset(args.source_folder)   # add here a bunch of repositories
+    py_train_dataset = PySourceDataset(
+        args.source_folder
+    )  # add here a bunch of repositories
     train_loader = DataLoader(
         py_train_dataset, batch_size=args.batch_size, num_workers=args.num_workers
     )
@@ -148,20 +153,24 @@ def cli_main():
         output_size,
         learning_rate=args.learning_rate,
         num_layers=args.n_layers,
-        dropout=args.dropout
+        dropout=args.dropout,
     )
 
     # ------------
     # training
     # ------------
-    aim_logger = AimLogger(
-        experiment=args.exp_name,
-        train_metric_prefix="train_",
-        test_metric_prefix="test_",
-        val_metric_prefix="val_",
+    # aim_logger = AimLogger(
+    #     experiment=args.exp_name,
+    #     train_metric_prefix="train_",
+    #     test_metric_prefix="test_",
+    #     val_metric_prefix="val_",
+    # )
+
+    mlf_logger = pl.loggers.MLFlowLogger(
+        experiment_name=args.exp_name, tracking_uri="file:./mlruns"
     )
-    trainer = pl.Trainer.from_argparse_args(args)
-    trainer.logger = aim_logger
+    trainer = pl.Trainer.from_argparse_args(args, logger=mlf_logger)
+    #  trainer.logger = aim_logger
     trainer.fit(model, train_loader)
 
     # ------------

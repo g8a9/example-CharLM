@@ -1,6 +1,6 @@
 #!/bin/bash
 
-mkdir source_data
+mkdir data
 
 echo "Scikit-learn..."
 wget -O sklearn.zip https://github.com/scikit-learn/scikit-learn/archive/master.zip
